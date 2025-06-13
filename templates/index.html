@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>B站自动涨粉工具</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .log-container {
+            height: 300px;
+            overflow-y: auto;
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+        .progress {
+            height: 25px;
+            background-color: #e9ecef;
+        }
+        .status-box {
+            background-color: #e9ecef;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-center mb-4">B站自动涨粉工具</h1>
+        <h6 class="text-center mb-4">原理：找到B站所有会互关或者互粉的UP主，先关注他们，然后等待他们回关</h6>
+        <div class="mb-4">
+            <label for="cookie" class="form-label">请输入B站Cookie：</label>
+            <textarea class="form-control" id="cookie" rows="3" placeholder="在此粘贴你的B站Cookie..."></textarea>
+        </div>
+
+        <div class="d-grid gap-2">
+            <button class="btn btn-primary" id="startBtn" onclick="startFollow()">开始关注</button>
+            <button class="btn btn-danger" id="stopBtn" onclick="stopFollow()" disabled>停止任务</button>
+        </div>
+
+        <div class="status-box">
+            <div class="row">
+                <div class="col-md-6">
+                    <p>总用户数：<span id="totalUsers">0</span></p>
+                    <p>当前进度：<span id="currentCount">0</span></p>
+                    <p>等待时间：<span id="waitingTime" class="text-primary" style="font-weight: bold; font-size: 1.1em;">0</span> 秒</p>
+                </div>
+                <div class="col-md-6">
+                    <p>成功数：<span id="successCount" class="text-success">0</span></p>
+                    <p>失败数：<span id="failCount" class="text-danger">0</span></p>
+                </div>
+            </div>
+            <div class="progress">
+                <div class="progress-bar" role="progressbar" style="width: 0%">0%</div>
+            </div>
+        </div>
+
+        <div class="log-container">
+            <div id="logMessages"></div>
+        </div>
+    </div>
+
+    <script>
+        let statusCheckInterval;
+
+        function startFollow() {
+            const cookie = document.getElementById('cookie').value.trim();
+            if (!cookie) {
+                alert('请输入Cookie');
+                return;
+            }
+
+            fetch('/start_follow', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: `cookie=${encodeURIComponent(cookie)}`
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    document.getElementById('startBtn').disabled = true;
+                    document.getElementById('stopBtn').disabled = false;
+                    startStatusCheck();
+                } else {
+                    alert(data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('发生错误，请查看控制台');
+            });
+        }
+
+        function stopFollow() {
+            fetch('/stop_follow', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('stopBtn').disabled = true;
+                document.getElementById('waitingTime').textContent = '0.0';
+            });
+        }
+
+        function updateStatus(data) {
+            document.getElementById('totalUsers').textContent = data.total_users;
+            document.getElementById('currentCount').textContent = data.current_count;
+            document.getElementById('successCount').textContent = data.success_count;
+            document.getElementById('failCount').textContent = data.fail_count;
+            
+            // 更新等待时间
+            if (data.waiting_time > 0) {
+                document.getElementById('waitingTime').textContent = data.waiting_time.toFixed(1);
+            } else {
+                document.getElementById('waitingTime').textContent = '0.0';
+            }
+
+            const progress = data.total_users ? (data.current_count / data.total_users * 100) : 0;
+            document.querySelector('.progress-bar').style.width = `${progress}%`;
+            document.querySelector('.progress-bar').textContent = `${Math.round(progress)}%`;
+
+            const logContainer = document.getElementById('logMessages');
+            logContainer.innerHTML = data.log_messages.map(msg => `<div>${msg}</div>`).join('');
+            logContainer.scrollTop = logContainer.scrollHeight;
+
+            if (!data.is_running) {
+                document.getElementById('startBtn').disabled = false;
+                document.getElementById('stopBtn').disabled = true;
+                clearInterval(statusCheckInterval);
+                // 重置等待时间显示
+                document.getElementById('waitingTime').textContent = '0.0';
+            }
+        }
+
+        function startStatusCheck() {
+            statusCheckInterval = setInterval(() => {
+                fetch('/status')
+                    .then(response => response.json())
+                    .then(data => updateStatus(data));
+            }, 300);
+        }
+    </script>
+</body>
+</html> 

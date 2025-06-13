@@ -1,0 +1,13 @@
+version: '3.8'
+
+services:
+  bilibili-fans:
+    build: .
+    container_name: bilibili-fans
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./logs:/app/logs  # 挂载日志目录
+    environment:
+      - TZ=Asia/Shanghai
+    restart: unless-stopped 
